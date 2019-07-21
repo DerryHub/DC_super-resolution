@@ -8,7 +8,8 @@ root = os.path.dirname(__file__)
 
 
 class MyDataset(Dataset):
-    def __init__(self, train=True):
+    def __init__(self, train=True, n=4):
+        self.n = n
         originPath = 'DC_data/DIV2K-dataset/DIV2K_{}_HR'
         X4Path = 'DC_data/DIV2K-dataset/DIV2K_{}_LR_bicubic_X4/DIV2K_{}_LR_bicubic/X4'
         if train:
@@ -35,10 +36,13 @@ class MyDataset(Dataset):
         # x4Image = Image.open(
         #     os.path.join(self.X4Path,
         #                  filename.split('.')[0] + 'x4.png'))
-        x4Image = originImage.resize((189, 141), Image.BICUBIC)
+        if self.n == 4:
+            xnImage = originImage.resize((189, 141), Image.BICUBIC)
+        elif self.n == 2:
+            xnImage = originImage.resize((378, 282), Image.BICUBIC)
         originImage = self.totensor(originImage)
-        x4Image = self.totensor(x4Image)
-        return originImage, x4Image
+        xnImage = self.totensor(xnImage)
+        return originImage, xnImage
 
 
 if __name__ == "__main__":

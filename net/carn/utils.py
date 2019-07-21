@@ -53,13 +53,18 @@ class CascadingBlock(nn.Module):
 
 
 class Shuffle(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, n=4):
         super(Shuffle, self).__init__()
-        self.shuffle = nn.Sequential(
-            nn.Conv2d(in_channels, 4 * in_channels, 3, 1, padding=1),
-            nn.PixelShuffle(2),
-            nn.Conv2d(in_channels, 4 * in_channels, 3, 1, padding=1),
-            nn.PixelShuffle(2))
+        if n == 4:
+            self.shuffle = nn.Sequential(
+                nn.Conv2d(in_channels, 4 * in_channels, 3, 1, padding=1),
+                nn.PixelShuffle(2),
+                nn.Conv2d(in_channels, 4 * in_channels, 3, 1, padding=1),
+                nn.PixelShuffle(2))
+        elif n == 2:
+            self.shuffle = nn.Sequential(
+                nn.Conv2d(in_channels, 4 * in_channels, 3, 1, padding=1),
+                nn.PixelShuffle(2))
 
     def forward(self, x):
         output = self.shuffle(x)

@@ -10,7 +10,7 @@ sys.path.append(root)
 from utils import CascadingBlock, Shuffle
 
 class CARN(nn.Module):
-    def __init__(self, groups=1):
+    def __init__(self, groups=1, n=4):
         super(CARN, self).__init__()
 
         self.firstConv = nn.Conv2d(3, 64, 3, 1, padding=1)
@@ -24,7 +24,7 @@ class CARN(nn.Module):
         self._1x1Conv_2 = nn.Conv2d(64 * 3, 64, 1, 1)
         self._1x1Conv_3 = nn.Conv2d(64 * 4, 64, 1, 1)
 
-        self.shuffle = Shuffle(64)
+        self.shuffle = Shuffle(64, n=n)
 
     def forward(self, x):
         x = 2*x - 1
