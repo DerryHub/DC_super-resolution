@@ -30,9 +30,12 @@ class MyDataset(Dataset):
     def __getitem__(self, index):
         filename = self.fileList[index]
         originImage = Image.open(os.path.join(self.originPath, filename))
-        x4Image = Image.open(
-            os.path.join(self.X4Path,
-                         filename.split('.')[0] + 'x4.png'))
+        originImage = originImage.resize((756, 564), Image.BICUBIC)
+        # print(originImage.size)
+        # x4Image = Image.open(
+        #     os.path.join(self.X4Path,
+        #                  filename.split('.')[0] + 'x4.png'))
+        x4Image = originImage.resize((189, 141), Image.BICUBIC)
         originImage = self.totensor(originImage)
         x4Image = self.totensor(x4Image)
         return originImage, x4Image
