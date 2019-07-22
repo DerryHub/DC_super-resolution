@@ -12,12 +12,12 @@ import numpy as np
 
 root = os.path.dirname(__file__)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 useCUDA = True
 model = 'CARN'
 lr = 1e-3
-EPOCH = 100
-batch_size = 3
+EPOCH = 20
+batch_size = 2
 loadModel = False
 n = 4
 
@@ -26,11 +26,12 @@ trainLoader = DataLoader(
     batch_size=batch_size,
     shuffle=True,
     num_workers=6)
-validLoader = DataLoader(
-    MyDataset(train=False, n=n),
-    batch_size=batch_size,
-    shuffle=False,
-    num_workers=6)
+
+# validLoader = DataLoader(
+#     MyDataset(train=False, n=n),
+#     batch_size=batch_size,
+#     shuffle=False,
+#     num_workers=6)
 
 if model == 'CARN':
     net = CARN(n=n)
@@ -84,13 +85,16 @@ for epoch in range(EPOCH):
         sum(lossList) / len(lossList)))
 
     net.eval()
-    validLoader_t = tqdm(validLoader)
+    validDataset = MyDataset(train=False, n=n)
+    validLoader_t = tqdm(validDataset)
     validLoader_t.set_description_str(' Valid epoch {}'.format(epoch))
     lossList = []
     for originImage, xnImage in validLoader_t:
         if useCUDA:
             originImage = originImage.cuda()
             xnImage = xnImage.cuda()
+        originImage = torch.unsqueeze(originImage, 0)
+        xnImage = torch.unsqueeze(xnImage, 0)
         with torch.no_grad():
             preImage = net(xnImage)
         loss = cost(preImage, originImage)
@@ -104,6 +108,7 @@ for epoch in range(EPOCH):
         validLoss = sum(lossList) / len(lossList)
         print('Saving {} model......'.format(model))
         torch.save(net.state_dict(),
-                os.path.join(root, 'models/{}_{}.pkl'.format(model, n)))
+                   os.path.join(root, 'models/{}_{}.pkl'.format(model, n)))
     else:
         print('Valid loss is too large to save model......')
+    print()

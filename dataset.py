@@ -10,19 +10,16 @@ root = os.path.dirname(__file__)
 class MyDataset(Dataset):
     def __init__(self, train=True, n=4):
         self.n = n
-        originPath = 'DC_data/DIV2K-dataset/DIV2K_{}_HR'
-        X4Path = 'DC_data/DIV2K-dataset/DIV2K_{}_LR_bicubic_X4/DIV2K_{}_LR_bicubic/X4'
+        self.train = train
+
         if train:
-            originPath = originPath.format('train')
-            X4Path = X4Path.format('train', 'train')
+            self.originPath = 'DC_data/trainData/'
         else:
-            originPath = originPath.format('valid')
-            X4Path = X4Path.format('valid', 'valid')
+            self.originPath = 'DC_data/val-images/val-images_original/'
 
-        self.originPath = os.path.join(root, originPath)
-        self.X4Path = os.path.join(root, X4Path)
+        self.xnPath = 'DC_data/val-images/val-images_x{}/'.format(n)
 
-        self.fileList = os.listdir(originPath)
+        self.fileList = os.listdir(os.path.join(root, self.originPath))
         self.totensor = transforms.ToTensor()
 
     def __len__(self):
@@ -30,16 +27,20 @@ class MyDataset(Dataset):
 
     def __getitem__(self, index):
         filename = self.fileList[index]
-        originImage = Image.open(os.path.join(self.originPath, filename))
-        originImage = originImage.resize((756, 564), Image.BICUBIC)
-        # print(originImage.size)
-        # x4Image = Image.open(
-        #     os.path.join(self.X4Path,
-        #                  filename.split('.')[0] + 'x4.png'))
-        if self.n == 4:
-            xnImage = originImage.resize((189, 141), Image.BICUBIC)
-        elif self.n == 2:
-            xnImage = originImage.resize((378, 282), Image.BICUBIC)
+        if self.train:
+            originImage = Image.open(
+                os.path.join(root, self.originPath, filename))
+            w, h = originImage.size
+            xnImage = originImage.resize((w // self.n, h // self.n),
+                                         Image.BICUBIC)
+        else:
+            xnImage = Image.open(
+                os.path.join(root, self.xnPath, 'val_x{} ({}).png'.format(
+                    self.n, index + 1)))
+            originImage = Image.open(
+                os.path.join(root, self.originPath,
+                             'val_original ({}).png'.format(index + 1)))
+
         originImage = self.totensor(originImage)
         xnImage = self.totensor(xnImage)
         return originImage, xnImage
@@ -47,4 +48,6 @@ class MyDataset(Dataset):
 
 if __name__ == "__main__":
     mydataset = MyDataset()
-    print(mydataset[0][1])
+    print(len(mydataset))
+    for o, x in mydataset:
+        print(o.shape, x.shape)

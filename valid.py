@@ -6,7 +6,7 @@ from PIL import Image
 from torchvision import transforms
 
 model = 'CARN'
-n = 2
+n = 4
 
 root = os.path.dirname(__file__)
 
