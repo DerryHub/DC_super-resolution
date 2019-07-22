@@ -5,7 +5,7 @@ from net.carn.carn_m import CARN_M
 from PIL import Image
 from torchvision import transforms
 
-model = 'CARN_M'
+model = 'CARN'
 n = 2
 
 root = os.path.dirname(__file__)

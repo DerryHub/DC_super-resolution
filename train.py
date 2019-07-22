@@ -8,16 +8,18 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
+import numpy as np
 
 root = os.path.dirname(__file__)
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 useCUDA = True
-model = 'CARN_M'
+model = 'CARN'
 lr = 1e-3
 EPOCH = 100
 batch_size = 3
-loadModel = True
-n = 2
+loadModel = False
+n = 4
 
 trainLoader = DataLoader(
     MyDataset(train=True, n=n),
@@ -52,6 +54,8 @@ if loadModel and os.path.exists(
 cost = nn.MSELoss(reduction='sum')
 
 opt = optim.Adam(net.parameters(), lr=lr)
+
+validLoss = np.inf
 
 for epoch in range(EPOCH):
     trainLoader_t = tqdm(trainLoader)
@@ -96,6 +100,10 @@ for epoch in range(EPOCH):
         epoch,
         sum(lossList) / len(lossList)))
 
-    print('Saving {} model......'.format(model))
-    torch.save(net.state_dict(),
-               os.path.join(root, 'models/{}_{}.pkl'.format(model, n)))
+    if sum(lossList) / len(lossList) < validLoss:
+        validLoss = sum(lossList) / len(lossList)
+        print('Saving {} model......'.format(model))
+        torch.save(net.state_dict(),
+                os.path.join(root, 'models/{}_{}.pkl'.format(model, n)))
+    else:
+        print('Valid loss is too large to save model......')
