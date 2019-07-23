@@ -7,7 +7,7 @@ import sys
 root = os.path.dirname(__file__)
 sys.path.append(root)
 
-from utils import CascadingBlock, Shuffle
+from carn_utils import CascadingBlock, Shuffle
 
 
 class CARN_M(nn.Module):

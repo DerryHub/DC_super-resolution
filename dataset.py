@@ -19,7 +19,7 @@ class MyDataset(Dataset):
 
         self.xnPath = 'DC_data/val-images/val-images_x{}/'.format(n)
 
-        self.fileList = os.listdir(os.path.join(root, self.originPath))
+        self.fileList = os.listdir(os.path.join(root, self.originPath))[:500]
         self.totensor = transforms.ToTensor()
 
     def __len__(self):

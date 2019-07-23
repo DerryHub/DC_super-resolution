@@ -2,6 +2,8 @@ import os
 from estimate import PSNR, SSIM
 from net.carn.carn import CARN
 from net.carn.carn_m import CARN_M
+from net.edsr.edsr import EDSR
+from net.srgan.SRGAN import Generator
 from PIL import Image
 from torchvision import transforms
 import torch
@@ -10,7 +12,7 @@ import time
 
 root = os.path.dirname(__file__)
 
-model = 'CARN'
+model = 'SRGAN'
 n = 4
 useCUDA = True
 
@@ -18,6 +20,10 @@ if model == 'CARN':
     net = CARN(n=n).cuda()
 elif model == 'CARN_M':
     net = CARN_M(n=n)
+elif model == 'EDSR':
+    net = EDSR(n=n)
+elif model == 'SRGAN':
+    net = Generator(n_residual_blocks=8, upsample_factor=n)
 
 if useCUDA:
     net = net.cuda()
@@ -44,7 +50,8 @@ for i in tqdm(range(100)):
 
     t0 = time.clock()
     if useCUDA:
-        preImg = net(torch.unsqueeze(totensor(xnImage), 0).cuda())[0].cpu().detach().numpy()
+        preImg = net(torch.unsqueeze(totensor(xnImage),
+                                     0).cuda())[0].cpu().detach().numpy()
     else:
         preImg = net(torch.unsqueeze(totensor(xnImage), 0))[0].detach().numpy()
     t1 = time.clock()
@@ -57,7 +64,6 @@ for i in tqdm(range(100)):
     SSIM_list.append(ssim)
 
     t += t1 - t0
-
 
 print('mean PSNR is {}'.format(sum(PSNR_list) / len(PSNR_list)))
 print('mean SSIM is {}'.format(sum(SSIM_list) / len(SSIM_list)))

@@ -4,6 +4,7 @@ from torch import optim
 from dataset import MyDataset
 from net.carn.carn import CARN
 from net.carn.carn_m import CARN_M
+from net.edsr.edsr import EDSR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -15,9 +16,9 @@ root = os.path.dirname(__file__)
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 useCUDA = True
 model = 'CARN'
-lr = 1e-3
+lr = 1e-4
 EPOCH = 20
-batch_size = 2
+batch_size = 1
 loadModel = False
 n = 4
 
@@ -37,6 +38,8 @@ if model == 'CARN':
     net = CARN(n=n)
 elif model == 'CARN_M':
     net = CARN_M(n=n)
+elif model == 'EDSR':
+    net = EDSR(n=n)
 
 print('Using {}'.format(model))
 
@@ -52,11 +55,13 @@ if loadModel and os.path.exists(
     net.load_state_dict(
         torch.load(os.path.join(root, 'models/{}_{}.pkl'.format(model, n))))
 
-cost = nn.MSELoss(reduction='sum')
+# cost = nn.MSELoss(reduction='sum')
+cost = nn.L1Loss(reduction='sum')
 
 opt = optim.Adam(net.parameters(), lr=lr)
 
-validLoss = np.inf
+MinValidLoss = np.inf
+MinTrainLoss = np.inf
 
 for epoch in range(EPOCH):
     trainLoader_t = tqdm(trainLoader)
@@ -80,9 +85,8 @@ for epoch in range(EPOCH):
     plt.savefig(
         os.path.join(root, 'figure/{}_epoch_{}.png'.format(model, epoch)))
 
-    print('Training loss of epoch {} is {}'.format(
-        epoch,
-        sum(lossList) / len(lossList)))
+    trainLoss = sum(lossList) / len(lossList)
+    print('Training loss of epoch {} is {}'.format(epoch, trainLoss))
 
     net.eval()
     validDataset = MyDataset(train=False, n=n)
@@ -100,15 +104,15 @@ for epoch in range(EPOCH):
         loss = cost(preImage, originImage)
         lossList.append(loss)
 
-    print('Validing loss of epoch {} is {}'.format(
-        epoch,
-        sum(lossList) / len(lossList)))
+    validLoss = sum(lossList) / len(lossList)
+    print('Validing loss of epoch {} is {}'.format(epoch, validLoss))
 
-    if sum(lossList) / len(lossList) < validLoss:
-        validLoss = sum(lossList) / len(lossList)
+    if validLoss < MinValidLoss or trainLoss < MinTrainLoss:
+        MinTrainLoss = min(MinTrainLoss, trainLoss)
+        MinValidLoss = min(MinValidLoss, validLoss)
         print('Saving {} model......'.format(model))
         torch.save(net.state_dict(),
                    os.path.join(root, 'models/{}_{}.pkl'.format(model, n)))
     else:
-        print('Valid loss is too large to save model......')
+        print('Loss is too large to save model......')
     print()

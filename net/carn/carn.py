@@ -7,7 +7,7 @@ import sys
 root = os.path.dirname(__file__)
 sys.path.append(root)
 
-from utils import CascadingBlock, Shuffle
+from carn_utils import CascadingBlock, Shuffle
 
 class CARN(nn.Module):
     def __init__(self, groups=1, n=4):
@@ -27,7 +27,7 @@ class CARN(nn.Module):
         self.shuffle = Shuffle(64, n=n)
 
     def forward(self, x):
-        x = 2*x - 1
+        x = x - 0.5
 
         firstConv_out = self.firstConv(x)
 
@@ -47,7 +47,7 @@ class CARN(nn.Module):
 
         output = self.lastConv(shuffle_out)
 
-        output = (output+1)/2
+        output = output + 0.5
 
         return output
 

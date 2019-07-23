@@ -2,10 +2,11 @@ import torch
 import os
 from net.carn.carn import CARN
 from net.carn.carn_m import CARN_M
+from net.srgan.SRGAN import Generator
 from PIL import Image
 from torchvision import transforms
 
-model = 'CARN'
+model = 'SRGAN'
 n = 4
 
 root = os.path.dirname(__file__)
@@ -14,6 +15,10 @@ if model == 'CARN':
     net = CARN(n=n)
 elif model == 'CARN_M':
     net = CARN_M(n=n)
+elif model == 'EDSR':
+    net = EDSR(n=n)
+elif model == 'SRGAN':
+    net = Generator(n_residual_blocks=8, upsample_factor=n)
 
 net.load_state_dict(
     torch.load(os.path.join(root, 'models/{}_{}.pkl'.format(model, n))))
