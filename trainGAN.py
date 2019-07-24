@@ -8,18 +8,19 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 import net.srgan.SRGAN as SR
+import net.esrgan.esrgan as ESR
 
 root = os.path.dirname(__file__)
 
 if torch.cuda.is_available():
-    device = 'cuda'
+    device = 'cuda:1'
 else:
     device = 'cpu'
 device = torch.device(device)
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 # useCUDA = True
-model = 'SRGAN'
+model = 'ESRGAN'
 lr = 1e-3
 EPOCH = 20
 batch_size = 1
@@ -42,6 +43,9 @@ if model == 'SRGAN':
     discriminator = SR.Discriminator().to(device)
     generaotr.weight_init(mean=0.0, std=0.2)
     discriminator.weight_init(mean=0.0, std=0.2)
+elif model == 'ESRGAN':
+    generaotr = ESR.Generator(n=n, num=4).to(device)
+    discriminator = ESR.Discriminator().to(device)
 
 print('Using {}'.format(model))
 
@@ -58,7 +62,7 @@ if loadModel and os.path.exists(
             os.path.join(
                 root, 'models/{}_{}.pkl'.format(model + '_discriminator', n))))
 
-costG = nn.MSELoss(reduction='sum')
+costG = nn.MSELoss()
 costD = nn.BCELoss()
 
 optG = optim.Adam(generaotr.parameters(), lr=lr, betas=(0.9, 0.999))
@@ -81,14 +85,22 @@ for epoch in range(EPOCH):
         originImage = originImage.to(device)
         xnImage = xnImage.to(device)
 
-        real_label = torch.ones(xnImage.size(0), xnImage.size(1)).to(device)
-        fake_label = torch.zeros(xnImage.size(0), xnImage.size(1)).to(device)
+        real_label = torch.ones(xnImage.size(0), 1).to(device)
+        fake_label = torch.zeros(xnImage.size(0), 1).to(device)
+
         #训练Ｄ网络
         optD.zero_grad()
-        d_real = discriminator(originImage)
+        preImg = generaotr(xnImage)
+        if model == 'SRGAN':
+            d_real = discriminator(originImage)
+        elif model == 'ESRGAN':
+            d_real = discriminator(originImage, preImg)
         d_real_loss = costD(d_real, real_label)
 
-        d_fake = discriminator(generaotr(xnImage))
+        if model == 'SRGAN':
+            d_fake = discriminator(preImg)
+        elif model == 'ESRGAN':
+            d_fake = discriminator(preImg, originImage)
         d_fake_loss = costD(d_fake, fake_label)
         d_total = d_real_loss + d_fake_loss
         d_total.backward()
@@ -98,13 +110,15 @@ for epoch in range(EPOCH):
         #训练Ｇ网络
         optG.zero_grad()
         g_real = generaotr(xnImage)
-        g_fake = discriminator(g_real)
+        if model == 'SRGAN':
+            g_fake = discriminator(g_real)
+        elif model == 'ESRGAN':
+            g_fake = discriminator(g_real, originImage)
         gan_loss = costD(g_fake, real_label)
         mse_loss = costG(g_real, originImage)
         g_total = mse_loss + 1e-2 * gan_loss
         g_total.backward()
         optG.step()
-
         GlossList.append(g_total.item())
 
     plt.figure()

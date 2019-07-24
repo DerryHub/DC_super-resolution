@@ -3,7 +3,8 @@ from estimate import PSNR, SSIM
 from net.carn.carn import CARN
 from net.carn.carn_m import CARN_M
 from net.edsr.edsr import EDSR
-from net.srgan.SRGAN import Generator
+import net.srgan.SRGAN as SR
+import net.esrgan.esrgan as ESR
 from PIL import Image
 from torchvision import transforms
 import torch
@@ -12,8 +13,8 @@ import time
 
 root = os.path.dirname(__file__)
 
-model = 'SRGAN'
-n = 4
+model = 'CARN_M'
+n = 2
 useCUDA = True
 
 if model == 'CARN':
@@ -23,7 +24,9 @@ elif model == 'CARN_M':
 elif model == 'EDSR':
     net = EDSR(n=n)
 elif model == 'SRGAN':
-    net = Generator(n_residual_blocks=8, upsample_factor=n)
+    net = SR.Generator(n_residual_blocks=8, upsample_factor=n)
+elif model == 'ESRGAN':
+    net = ESR.Generator(n=n, num=4)
 
 if useCUDA:
     net = net.cuda()
