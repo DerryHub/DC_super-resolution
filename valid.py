@@ -2,12 +2,13 @@ import torch
 import os
 from net.carn.carn import CARN
 from net.carn.carn_m import CARN_M
+from net.edsr.edsr import EDSR
 import net.srgan.SRGAN as SR
 import net.esrgan.esrgan as ESR
 from PIL import Image
 from torchvision import transforms
 
-model = 'CARN'
+model = 'EDSR'
 n = 2
 
 root = os.path.dirname(__file__)
@@ -24,7 +25,9 @@ elif model == 'ESRGAN':
     net = ESR.Generator(n=n, num=4)
 
 net.load_state_dict(
-    torch.load(os.path.join(root, 'models/{}_{}.pkl'.format(model, n))))
+    torch.load(
+        os.path.join(root, 'models/{}_{}.pkl'.format(model, n)),
+        map_location={'cuda:1': 'cuda:0'}))
 
 if n == 4:
     xnImg = Image.open(
@@ -40,8 +43,9 @@ originImg = Image.open(
 totensor = transforms.ToTensor()
 topil = transforms.ToPILImage()
 
-preImg = net(torch.unsqueeze(totensor(xnImg), 0))
-
+with torch.no_grad():
+    preImg = net(torch.unsqueeze(totensor(xnImg), 0))
+preImg = torch.clamp(preImg, 0, 1)
 preImg = topil(preImg[0])
 
 originImg.show()

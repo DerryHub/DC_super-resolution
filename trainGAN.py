@@ -13,14 +13,13 @@ import net.esrgan.esrgan as ESR
 root = os.path.dirname(__file__)
 
 if torch.cuda.is_available():
-    device = 'cuda:1'
+    device = 'cuda:0'
 else:
     device = 'cpu'
 device = torch.device(device)
 
-
 # useCUDA = True
-model = 'ESRGAN'
+model = 'SRGAN'
 lr = 1e-3
 EPOCH = 20
 batch_size = 1
@@ -62,15 +61,18 @@ if loadModel and os.path.exists(
             os.path.join(
                 root, 'models/{}_{}.pkl'.format(model + '_discriminator', n))))
 
-costG = nn.MSELoss()
+# costG = nn.MSELoss()
+costG = nn.L1Loss()
 costD = nn.BCELoss()
 
 optG = optim.Adam(generaotr.parameters(), lr=lr, betas=(0.9, 0.999))
-optD = optim.SGD(
-    discriminator.parameters(), lr=lr / 100, momentum=0.9, nesterov=True)
+optD = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.9, 0.999))
 steplrG = torch.optim.lr_scheduler.StepLR(optG, 5)
 steplrD = torch.optim.lr_scheduler.StepLR(optD, 10)
-validLoss = np.inf
+
+MinValidLoss = np.inf
+MinGLoss = np.inf
+MinDLoss = np.inf
 
 for epoch in range(EPOCH):
     steplrG.step()
@@ -116,7 +118,7 @@ for epoch in range(EPOCH):
             g_fake = discriminator(g_real, originImage)
         gan_loss = costD(g_fake, real_label)
         mse_loss = costG(g_real, originImage)
-        g_total = mse_loss + 1e-2 * gan_loss
+        g_total = mse_loss + 1e-3 * gan_loss
         g_total.backward()
         optG.step()
         GlossList.append(g_total.item())
@@ -135,11 +137,10 @@ for epoch in range(EPOCH):
         os.path.join(
             root, 'figure/{}_epoch_{}.png'.format(model + '_discriminator',
                                                   epoch)))
-
+    GLoss = sum(GlossList) / len(GlossList)
+    DLoss = sum(DlossList) / len(DlossList)
     print('Training loss of epoch {} Gloss is {} Dloss is {}'.format(
-        epoch,
-        sum(GlossList) / len(GlossList),
-        sum(DlossList) / len(DlossList)))
+        epoch, GLoss, DLoss))
 
     generaotr.eval()
     discriminator.eval()
@@ -154,12 +155,13 @@ for epoch in range(EPOCH):
         loss = costG(preImage, originImage)
         lossList.append(loss)
 
-    print('Validing loss of epoch {} is {}'.format(
-        epoch,
-        sum(lossList) / len(lossList)))
+    ValidLoss = sum(lossList) / len(lossList)
+    print('Validing loss of epoch {} is {}'.format(epoch, ValidLoss))
 
-    if sum(lossList) / len(lossList) < validLoss:
-        validLoss = sum(lossList) / len(lossList)
+    if ValidLoss < MinValidLoss or GLoss < MinGLoss or DLoss < MinDLoss:
+        MinDLoss = min(MinDLoss, DLoss)
+        MinGLoss = min(MinGLoss, GLoss)
+        MinValidLoss = min(MinValidLoss, ValidLoss)
         print('Saving {} model......'.format(model))
         torch.save(generaotr.state_dict(),
                    os.path.join(root, 'models/{}_{}.pkl'.format(model, n)))

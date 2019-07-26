@@ -10,10 +10,11 @@ from torchvision import transforms
 import torch
 from tqdm import tqdm
 import time
+import numpy as np
 
 root = os.path.dirname(__file__)
 
-model = 'CARN_M'
+model = 'EDSR'
 n = 2
 useCUDA = True
 
@@ -32,7 +33,9 @@ if useCUDA:
     net = net.cuda()
 
 net.load_state_dict(
-    torch.load(os.path.join(root, 'models/{}_{}.pkl'.format(model, n))))
+    torch.load(
+        os.path.join(root, 'models/{}_{}.pkl'.format(model, n)),
+        map_location={'cuda:1': 'cuda:0'}))
 
 originPath = 'DC_data/val-images/val-images_original/'
 xnPath = 'DC_data/val-images/val-images_x{}/'.format(n)
@@ -52,11 +55,13 @@ for i in tqdm(range(100)):
     totensor = transforms.ToTensor()
 
     t0 = time.clock()
-    if useCUDA:
-        preImg = net(torch.unsqueeze(totensor(xnImage),
-                                     0).cuda())[0].cpu().detach().numpy()
-    else:
-        preImg = net(torch.unsqueeze(totensor(xnImage), 0))[0].detach().numpy()
+    with torch.no_grad():
+        if useCUDA:
+            preImg = net(torch.unsqueeze(totensor(xnImage),
+                                        0).cuda())[0].cpu().detach().numpy()
+        else:
+            preImg = net(torch.unsqueeze(totensor(xnImage), 0))[0].detach().numpy()
+    preImg = np.clip(preImg, 0, 1)
     t1 = time.clock()
     originImage = totensor(originImage).detach().numpy()
 
