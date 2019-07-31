@@ -1,26 +1,21 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch import optim
 from dataset import MyDataset
+import net.esrgan.esrgan as ESR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-import net.srgan.SRGAN as SR
-import net.esrgan.esrgan as ESR
+from torch.autograd import Variable
 
 root = os.path.dirname(__file__)
 
-if torch.cuda.is_available():
-    device = 'cuda:0'
-else:
-    device = 'cpu'
-device = torch.device(device)
-
-# useCUDA = True
-model = 'SRGAN'
-lr = 1e-3
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+useCUDA = True
+model = 'ESRGAN'
+lr = 2e-4
 EPOCH = 20
 batch_size = 1
 loadModel = False
@@ -31,143 +26,159 @@ trainLoader = DataLoader(
     batch_size=batch_size,
     shuffle=True,
     num_workers=6)
-validLoader = DataLoader(
-    MyDataset(train=False, n=n),
-    batch_size=batch_size,
-    shuffle=False,
-    num_workers=6)
 
-if model == 'SRGAN':
-    generaotr = SR.Generator(n_residual_blocks=8, upsample_factor=n).to(device)
-    discriminator = SR.Discriminator().to(device)
-    generaotr.weight_init(mean=0.0, std=0.2)
-    discriminator.weight_init(mean=0.0, std=0.2)
-elif model == 'ESRGAN':
-    generaotr = ESR.Generator(n=n, num=4).to(device)
-    discriminator = ESR.Discriminator().to(device)
+if model == 'ESRGAN':
+    generator = ESR.Generator(n=n, num=4)
+    discriminator = ESR.Discriminator()
+    # featureExtractor = ESR.FeatureExtractor()
+    # featureExtractor.load_state_dict(
+    #     torch.load(os.path.join(root, 'models/FeatureExtractor.pkl')))
+    # featureExtractor.eval()
 
-print('Using {}'.format(model))
+if useCUDA:
+    generator = generator.cuda()
+    discriminator = discriminator.cuda()
+    # featureExtractor = featureExtractor.cuda()
 
 if not os.path.exists(os.path.join(root, 'models/')):
     os.mkdir(os.path.join(root, 'models/'))
 
-if loadModel and os.path.exists(
-        os.path.join(root, 'models/{}_{}.pkl'.format(model, n))):
+if loadModel:
     print('Loading {} model......'.format(model))
-    generaotr.load_state_dict(
+    generator.load_state_dict(
         torch.load(os.path.join(root, 'models/{}_{}.pkl'.format(model, n))))
     discriminator.load_state_dict(
         torch.load(
-            os.path.join(
-                root, 'models/{}_{}.pkl'.format(model + '_discriminator', n))))
+            os.path.join(root, 'models/{}_{}_discriminator.pkl'.format(
+                model, n))))
 
-# costG = nn.MSELoss()
-costG = nn.L1Loss()
-costD = nn.BCELoss()
+cost_GAN = nn.BCEWithLogitsLoss()
+cost_content = nn.L1Loss()
+cost_pixel = nn.L1Loss()
 
-optG = optim.Adam(generaotr.parameters(), lr=lr, betas=(0.9, 0.999))
-optD = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.9, 0.999))
-steplrG = torch.optim.lr_scheduler.StepLR(optG, 5)
-steplrD = torch.optim.lr_scheduler.StepLR(optD, 10)
+opt_G = optim.Adam(generator.parameters(), lr=lr)
+opt_D = optim.Adam(discriminator.parameters(), lr=lr)
+
+if not loadModel:
+    print('pretraining generator......')
+    trainLoader_t = tqdm(trainLoader)
+    trainLoader_t.set_description_str(' pretrain...')
+    for originImage, xnImage in trainLoader_t:
+        if useCUDA:
+            originImage = originImage.cuda()
+            xnImage = xnImage.cuda()
+        gen_hr = generator(xnImage)
+        loss = cost_pixel(originImage, gen_hr)
+        opt_G.zero_grad()
+        loss.backward()
+        opt_G.step()
+
+print('Training......')
 
 MinValidLoss = np.inf
-MinGLoss = np.inf
-MinDLoss = np.inf
+MinTrainLoss_G = np.inf
+MinTrainLoss_D = np.inf
+
+torch.cuda.empty_cache()
 
 for epoch in range(EPOCH):
-    steplrG.step()
-    steplrD.step()
     trainLoader_t = tqdm(trainLoader)
     trainLoader_t.set_description_str(' Train epoch {}'.format(epoch))
-    GlossList = []
-    DlossList = []
-    generaotr.train()
-    discriminator.train()
+    lossList_G = []
+    lossList_D = []
+    generator.train()
     for originImage, xnImage in trainLoader_t:
-        originImage = originImage.to(device)
-        xnImage = xnImage.to(device)
+        valid = Variable(
+            torch.Tensor(np.ones((xnImage.size(0), 1, 64, 64))),
+            requires_grad=False)
+        fake = Variable(
+            torch.Tensor(np.zeros((xnImage.size(0), 1, 64, 64))),
+            requires_grad=False)
+        if useCUDA:
+            originImage = originImage.cuda()
+            xnImage = xnImage.cuda()
+            valid = valid.cuda()
+            fake = fake.cuda()
 
-        real_label = torch.ones(xnImage.size(0), 1).to(device)
-        fake_label = torch.zeros(xnImage.size(0), 1).to(device)
+        gen_hr = generator(xnImage)
+        loss_pixel = cost_pixel(originImage, gen_hr)
 
-        #训练Ｄ网络
-        optD.zero_grad()
-        preImg = generaotr(xnImage)
-        if model == 'SRGAN':
-            d_real = discriminator(originImage)
-        elif model == 'ESRGAN':
-            d_real = discriminator(originImage, preImg)
-        d_real_loss = costD(d_real, real_label)
+        pred_real = discriminator(originImage).detach()
+        pred_fake = discriminator(gen_hr)
+        loss_GAN = cost_GAN(pred_fake - pred_real.mean(0, keepdim=True), valid)
 
-        if model == 'SRGAN':
-            d_fake = discriminator(preImg)
-        elif model == 'ESRGAN':
-            d_fake = discriminator(preImg, originImage)
-        d_fake_loss = costD(d_fake, fake_label)
-        d_total = d_real_loss + d_fake_loss
-        d_total.backward()
-        optD.step()
-        DlossList.append(d_total.item())
+        # gen_features = featureExtractor(gen_hr)
+        # real_features = featureExtractor(originImage).detach()
+        # loss_content = cost_content(gen_features, real_features)
 
-        #训练Ｇ网络
-        optG.zero_grad()
-        g_real = generaotr(xnImage)
-        if model == 'SRGAN':
-            g_fake = discriminator(g_real)
-        elif model == 'ESRGAN':
-            g_fake = discriminator(g_real, originImage)
-        gan_loss = costD(g_fake, real_label)
-        mse_loss = costG(g_real, originImage)
-        g_total = mse_loss + 1e-3 * gan_loss
-        g_total.backward()
-        optG.step()
-        GlossList.append(g_total.item())
+        loss_G = 5e-3 * loss_GAN + 1e-2 * loss_pixel
+
+        lossList_G.append(loss_G)
+
+        opt_G.zero_grad()
+        loss_G.backward()
+        opt_G.step()
+
+        pred_real = discriminator(originImage)
+        pred_fake = discriminator(gen_hr.detach())
+
+        loss_real = cost_GAN(pred_real - pred_fake.mean(0, keepdim=True), valid)
+        loss_fake = cost_GAN(pred_fake - pred_real.mean(0, keepdim=True), fake)
+
+        loss_D = (loss_real + loss_fake) / 2
+
+        lossList_D.append(loss_D)
+
+        opt_D.zero_grad()
+        loss_D.backward()
+        opt_D.step()
 
     plt.figure()
-    plt.plot(GlossList)
-    plt.title('Generator loss figure')
+    plt.plot(lossList_D)
+    plt.title('loss D figure')
     plt.savefig(
-        os.path.join(
-            root, 'figure/{}_epoch_{}.png'.format(model + '_Generator',
-                                                  epoch)))
+        os.path.join(root, 'figure/{}_epoch_{}_D.png'.format(model, epoch)))
     plt.figure()
-    plt.plot(DlossList)
-    plt.title('discriminator loss figure')
+    plt.plot(lossList_G)
+    plt.title('loss G figure')
     plt.savefig(
-        os.path.join(
-            root, 'figure/{}_epoch_{}.png'.format(model + '_discriminator',
-                                                  epoch)))
-    GLoss = sum(GlossList) / len(GlossList)
-    DLoss = sum(DlossList) / len(DlossList)
-    print('Training loss of epoch {} Gloss is {} Dloss is {}'.format(
-        epoch, GLoss, DLoss))
+        os.path.join(root, 'figure/{}_epoch_{}_G.png'.format(model, epoch)))
 
-    generaotr.eval()
-    discriminator.eval()
-    validLoader_t = tqdm(validLoader)
+    trainLoss_G = sum(lossList_G) / len(lossList_G)
+    trainLoss_D = sum(lossList_D) / len(lossList_D)
+    print('Training loss G of epoch {} is {}'.format(epoch, trainLoss_G))
+    print('Training loss D of epoch {} is {}'.format(epoch, trainLoss_D))
+
+    generator.eval()
+    validDataset = MyDataset(train=False, n=n)
+    validLoader_t = tqdm(validDataset)
     validLoader_t.set_description_str(' Valid epoch {}'.format(epoch))
     lossList = []
     for originImage, xnImage in validLoader_t:
-        originImage = originImage.to(device)
-        xnImage = xnImage.to(device)
+        if useCUDA:
+            originImage = originImage.cuda()
+            xnImage = xnImage.cuda()
+        originImage = torch.unsqueeze(originImage, 0)
+        xnImage = torch.unsqueeze(xnImage, 0)
         with torch.no_grad():
-            preImage = generaotr(xnImage)
-        loss = costG(preImage, originImage)
+            preImage = generator(xnImage)
+        loss = cost_pixel(preImage, originImage)
         lossList.append(loss)
 
-    ValidLoss = sum(lossList) / len(lossList)
-    print('Validing loss of epoch {} is {}'.format(epoch, ValidLoss))
+    validLoss = sum(lossList) / len(lossList)
+    print('Validing loss of epoch {} is {}'.format(epoch, validLoss))
 
-    if ValidLoss < MinValidLoss or GLoss < MinGLoss or DLoss < MinDLoss:
-        MinDLoss = min(MinDLoss, DLoss)
-        MinGLoss = min(MinGLoss, GLoss)
-        MinValidLoss = min(MinValidLoss, ValidLoss)
+    if validLoss < MinValidLoss or trainLoss_D < MinTrainLoss_D or trainLoss_G < MinTrainLoss_G:
+        MinTrainLoss_D = min(MinTrainLoss_D, trainLoss_D)
+        MinTrainLoss_G = min(MinTrainLoss_G, trainLoss_G)
+        MinValidLoss = min(MinValidLoss, validLoss)
         print('Saving {} model......'.format(model))
-        torch.save(generaotr.state_dict(),
+        torch.save(generator.state_dict(),
                    os.path.join(root, 'models/{}_{}.pkl'.format(model, n)))
         torch.save(
             discriminator.state_dict(),
-            os.path.join(
-                root, 'models/{}_{}.pkl'.format(model + '_discriminator', n)))
+            os.path.join(root, 'models/{}_{}_discriminator.pkl'.format(
+                model, n)))
     else:
-        print('Valid loss is too large to save model......')
+        print('Loss is too large to save model......')
+    print()

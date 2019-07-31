@@ -30,6 +30,7 @@ class MyDataset(Dataset):
         if self.train:
             originImage = Image.open(
                 os.path.join(root, self.originPath, filename))
+            # originImage = originImage.resize((512, 512), Image.BICUBIC)
             w, h = originImage.size
             xnImage = originImage.resize((w // self.n, h // self.n),
                                          Image.BICUBIC)
@@ -45,9 +46,26 @@ class MyDataset(Dataset):
         xnImage = self.totensor(xnImage)
         return originImage, xnImage
 
+class TestDataset(Dataset):
+    def __init__(self, n=4):
+        self.xnPath = 'DC_data/test-images_x{}/'.format(n)
+
+        self.fileList = os.listdir(os.path.join(root, self.xnPath))
+        self.totensor = transforms.ToTensor()
+
+    def __len__(self):
+        return len(self.fileList)
+
+    def __getitem__(self, index):
+        self.fileList[index]
+        xnImage = Image.open(
+            os.path.join(root, self.xnPath, 'test_x4 ({}).png'.format(index+1)))
+
+        xnImage = self.totensor(xnImage)
+        return xnImage
 
 if __name__ == "__main__":
-    mydataset = MyDataset()
+    mydataset = TestDataset()
     print(len(mydataset))
-    for o, x in mydataset:
-        print(o.shape, x.shape)
+    for x in mydataset:
+        print(x.shape)

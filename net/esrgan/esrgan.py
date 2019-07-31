@@ -7,14 +7,17 @@ import sys
 root = os.path.dirname(__file__)
 sys.path.append(root)
 
-from esrgan_utils import RRDB, Shuffle
+from esrgan_utils import ResidualInResidualDenseBlock, FeatureExtractor, Shuffle
 
 
 class Generator(nn.Module):
-    def __init__(self, n=4, beta=0.1, num=8):
+    def __init__(self, n=4, beta=0.2, num=16):
         super(Generator, self).__init__()
         self.firstConv = nn.Conv2d(3, 64, 3, 1, padding=1)
-        self.blocks = [RRDB(64, beta=beta) for _ in range(num)]
+        self.blocks = [
+            ResidualInResidualDenseBlock(in_channels=64, beta=beta)
+            for _ in range(num)
+        ]
         self.blocks.append(nn.Conv2d(64, 64, 3, 1, padding=1))
         self.BBs = nn.Sequential(*self.blocks)
         self.shuffle = Shuffle(64, n=n)
@@ -29,55 +32,31 @@ class Generator(nn.Module):
         output = self.lastConv(output)
         return output
 
-
 class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
-        self.feature = nn.Sequential(
-            nn.Conv2d(3, 64, 5, 2),  #1020
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(64, 128, 4, 2),  #509
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(128, 256, 3, 2),  #507
-            # nn.BatchNorm2d(256),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(256, 256, 5, 2),  #252
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(256, 256, 4, 2),  #124
-            # nn.BatchNorm2d(256),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(256, 256, 4, 2),  #61
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(256, 128, 3, 2),  #29
-            # nn.BatchNorm2d(128),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(128, 128, 3, 2),  #14
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(inplace=True))
+        def discriminator_block(in_filters, out_filters, first_block=False):
+            layers = []
+            layers.append(nn.Conv2d(in_filters, out_filters, kernel_size=3, stride=1, padding=1))
+            if not first_block:
+                layers.append(nn.BatchNorm2d(out_filters))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            layers.append(nn.Conv2d(out_filters, out_filters, kernel_size=3, stride=2, padding=1))
+            layers.append(nn.BatchNorm2d(out_filters))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        layers = []
+        in_filters = 3
+        for i, out_filters in enumerate([64, 128, 256, 512]):
+            layers.extend(discriminator_block(in_filters, out_filters, first_block=(i == 0)))
+            in_filters = out_filters
+        layers.append(nn.Conv2d(out_filters, 1, kernel_size=3, stride=1, padding=1))
+        self.model = nn.Sequential(*layers)
 
-        self.linear = nn.Sequential(
-            nn.Linear(128 * 2 * 2, 128), nn.ReLU(), nn.Linear(128, 1))
-
-    def forward(self, x1, x2):
-        o1 = self.feature(x1)
-        # print(o1.shape)
-        o1 = o1.view([-1, 128 * 2 * 2])
-        o1 = self.linear(o1)
-        o2 = self.feature(x2)
-        o2 = o2.view([-1, 128 * 2 * 2])
-        o2 = self.linear(o2)
-        o2 = torch.zeros_like(o2) + o2.mean()
-        output = torch.sigmoid(o1 - o2)
-
-        return output
-
+    def forward(self, img):
+        return self.model(img)
 
 if __name__ == "__main__":
-    g = Generator()
-    a = torch.ones([3, 3, 1024, 1024])
-    # print(g(a).shape)
-    d = Discriminator()
-    print(d(a, a))
+    g = Discriminator().cuda()
+    a = torch.ones([1, 3, 1024, 1024]).cuda()
+    print(g(a).shape)

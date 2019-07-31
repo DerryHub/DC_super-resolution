@@ -11,15 +11,20 @@ import torch
 from tqdm import tqdm
 import time
 import numpy as np
+from dataset import TestDataset
 
 root = os.path.dirname(__file__)
 
-model = 'EDSR'
-n = 2
+model = 'CARN'
+n = 4
 useCUDA = True
 
+dataset = TestDataset(n=n)
+
+topil = transforms.ToPILImage()
+
 if model == 'CARN':
-    net = CARN(n=n).cuda()
+    net = CARN(n=n)
 elif model == 'CARN_M':
     net = CARN_M(n=n)
 elif model == 'EDSR':
@@ -37,42 +42,19 @@ net.load_state_dict(
         os.path.join(root, 'models/{}_{}.pkl'.format(model, n)),
         map_location={'cuda:1': 'cuda:0'}))
 
-originPath = 'DC_data/val-images/val-images_original/'
-xnPath = 'DC_data/val-images/val-images_x{}/'.format(n)
+if not os.path.exists(os.path.join(root, 'DC_data/test-images_original/')):
+    os.makedirs(os.path.join(root, 'DC_data/test-images_original/'))
 
-PSNR_list = []
-SSIM_list = []
-
-t = 0
-
-for i in tqdm(range(100)):
-    originName = 'val_original ({}).png'.format(i + 1)
-    xnName = 'val_x{} ({}).png'.format(n, i + 1)
-
-    originImage = Image.open(os.path.join(root, originPath, originName))
-    xnImage = Image.open(os.path.join(root, xnPath, xnName))
-
-    totensor = transforms.ToTensor()
-
-    t0 = time.clock()
+for i, xnImg in enumerate(tqdm(dataset)):
+    xnImg = torch.unsqueeze(xnImg, 0)
+    if useCUDA:
+        xnImg = xnImg.cuda()
     with torch.no_grad():
         if useCUDA:
-            preImg = net(torch.unsqueeze(totensor(xnImage),
-                                        0).cuda())[0].cpu().detach().numpy()
+            xnImg = xnImg.cuda()
+            originalImage = net(xnImg).cpu()[0]
         else:
-            preImg = net(torch.unsqueeze(totensor(xnImage), 0))[0].detach().numpy()
-    preImg = np.clip(preImg, 0, 1)
-    t1 = time.clock()
-    originImage = totensor(originImage).detach().numpy()
-
-    psnr = PSNR(originImage, preImg)
-    ssim = SSIM(originImage, preImg)
-
-    PSNR_list.append(psnr)
-    SSIM_list.append(ssim)
-
-    t += t1 - t0
-
-print('mean PSNR is {}'.format(sum(PSNR_list) / len(PSNR_list)))
-print('mean SSIM is {}'.format(sum(SSIM_list) / len(SSIM_list)))
-print('time is {}'.format(t))
+            originalImage = net(xnImg)[0]
+    originalImage = torch.clamp(originalImage, 0, 1)
+    originalImage = topil(originalImage)
+    originalImage.save(os.path.join(root, 'DC_data/test-images_original/', 'test_original ({}).png'.format(i+1)))

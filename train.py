@@ -5,6 +5,7 @@ from dataset import MyDataset
 from net.carn.carn import CARN
 from net.carn.carn_m import CARN_M
 from net.edsr.edsr import EDSR
+from net.esrg.esrg import ESRG
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -15,7 +16,7 @@ root = os.path.dirname(__file__)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 useCUDA = True
-model = 'CARN'
+model = 'EDSR'
 lr = 1e-4
 EPOCH = 20
 batch_size = 1
@@ -40,6 +41,8 @@ elif model == 'CARN_M':
     net = CARN_M(n=n)
 elif model == 'EDSR':
     net = EDSR(n=n)
+elif model == 'ESRG':
+    net = ESRG(n=n, num=4)
 
 print('Using {}'.format(model))
 
