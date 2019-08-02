@@ -21,7 +21,7 @@
 |  CARN  | adam/1e-4 | MSELoss  |  20   |     106     | 33.69 | 0.94 | loss还有下降空间 |
 | CARN M | adam/1e-4 | MSELoss  |  20   |     106     | 33.75 | 0.94 | loss还有下降空间 |
 |  CARN  | adam/1e-4 | MSELoss  |  50   |     106     | 34.37 | 0.95 | loss基本饱和     |
-|  CARN  | adam/1e-4 | MSELoss  |  50   |     106     | 34.10 | 0.95 | loss基本饱和     |
+|  CARN M | adam/1e-4 | MSELoss  |  50   |     106     | 34.10 | 0.95 | loss基本饱和     |
 |  EDSR  | adam/1e-4 | MSELoss  |  20   |     167     | 33.90 | 0.94 | loss还有下降空间 |
 |  CARN  | adam/1e-4 |  L1Loss  |  20   |     106     | 33.88 | 0.95 | loss基本饱和     |
 |  CARN  | adam/1e-4 |  L1Loss  |  20   |     106     | 33.93 | 0.94 | loss基本饱和     |
